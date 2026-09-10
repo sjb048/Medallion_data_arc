@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # ===== FastAPI Application =====
+  council-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: council-api
+    ports:
+      - "6367:6367"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=6367
+      - MONGODB_HOST=your_mongodb_host
+      - MONGODB_PORT=your_port_number
+      - MONGODB_DATABASE=your_database_name
+      # Add your other env variables here
+    volumes:
+      # Mount for development (optional - remove in production)
+      # - ./script:/app/script
+      # Mount for logs
+      - ./logs:/app/logs
+      # Mount for data
+      - ./data:/app/data
+    restart: always
+    depends_on:
+      - mongodb
+    networks:
+      - council-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6367/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ===== Scheduler (runs both cron jobs on schedule) =====
+  # cron_feeds.py - every 12 hours
+  # councilor_cron.py - every 15th of month
+  # NOTE: Does NOT depend on Elasticsearch - handles ES errors gracefully
+  council-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    container_name: council-scheduler
+    environment:
+      - MONGODB_HOST=your_mongodb_host
+      - MONGODB_PORT=your_port_number
+      - MONGODB_DATABASE=your_database_name
+      - ELASTICSEARCH_HOST=your_elasticsearch_host
+      - ELASTICSEARCH_PORT=your_elasticsearch_port
+      - ELASTICSEARCH_ENABLED=true
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: always
+    depends_on:
+      - mongodb
+      # Removed elasticsearch dependency - cron handles ES errors gracefully
+    networks:
+      - council-network
+
+
+networks:
+  council-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
